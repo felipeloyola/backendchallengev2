@@ -1,8 +1,10 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, abort
 from flask_sqlalchemy import SQLAlchemy
 import requests
 from datetime import datetime
 import json
+
+from params.ParameterManager import ParameterManager
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////code/embeded.db'
@@ -25,15 +27,16 @@ URL_BASE = "https://earthquake.usgs.gov/fdsnws/event/1/query"
 
 @app.route('/searchEarthquake/getEarthquakesByDates/<starttime>/<endtime>/<minmagnitude>/', methods=['GET'])
 def getEarthquakesByDates(starttime, endtime, minmagnitude):
+    params = ParameterManager(app)
 
-    params={
-            "format": "geojson",
-            "starttime": starttime,
-            "endtime": endtime,
-            "minmagnitude": minmagnitude,
-    }
+    params.add("format", "geojson")
+    params.add("starttime", starttime, re=r"\d{4}-\d{2}-\d{2}")
+    params.add("endtime", endtime, re=r"\d{4}-\d{2}-\d{2}")
+    params.add("minmagnitude", minmagnitude, re=r"\d\.\d")
+    if not params.valid():
+        abort(400)
 
-    response = requests.get(makeURL(params))
+    response = requests.get(makeURL(params.get_params()))
 
     output = [ serialize(eq) for eq in response.json().get("features") ]
 
@@ -49,20 +52,24 @@ def getEarthquakesByDates(starttime, endtime, minmagnitude):
         db.session.add(eq)
         db.session.commit()
     except Exception as e:
-        raise e
+        app.logger.error(f"An error occurred {e}")
+        abort(500)
 
     return jsonify(output)
 
 @app.route('/searchEarthquake/getEarthquakesByMagnitudes/<minmagnitude>/<maxmagnitude>/', methods=['GET'])
 def getEarthquakesByMagnitudes(minmagnitude, maxmagnitude):
 
-    params={
-            "format": "geojson",
-            "minmagnitude": minmagnitude,
-            "maxmagnitude": maxmagnitude
-    }
+    params = ParameterManager(app)
 
-    response = requests.get(makeURL(params))
+    params.add("format", "geojson")
+    params.add("minmagnitude", minmagnitude, re=r"\d\.\d")
+    params.add("maxmagnitude", maxmagnitude, re=r"\d\.\d")
+
+    if not params.valid():
+        abort(400)
+
+    response = requests.get(makeURL(params.get_params()))
 
     output = [serialize(eq) for eq in response.json().get("features")]
 
@@ -78,7 +85,9 @@ def getEarthquakesByMagnitudes(minmagnitude, maxmagnitude):
         db.session.add(eq)
         db.session.commit()
     except Exception as e:
-        raise e
+        app.logger.error(f"An error occurred {e}")
+        abort(500)
+
 
     return jsonify(output)
 

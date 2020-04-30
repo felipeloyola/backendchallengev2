@@ -26,6 +26,4 @@ ADD . /code/
 ENV FLASK_ENV=development
 ENV FLASK_APP=/code/app.py
 
-ENTRYPOINT ["flask", "run", "--host=0.0.0.0"]
 
-EXPOSE 5000
